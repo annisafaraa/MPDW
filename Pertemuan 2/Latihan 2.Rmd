@@ -1,1 +1,312 @@
+---
+title: "Tugas MPDW P2"
+author: "Farah Annisa Mahmud"
+date: "`r Sys.Date()`"
+output: html_document
+---
 
+# Library
+
+```{r}
+library("forecast")
+library("graphics")
+library("TTR")
+library("TSA")
+library("ggplot2")
+```
+
+# Import Data
+
+```{r}
+data <- read.csv("C:/Users/LENOVO/Downloads/Reversed Bitcoin Historical Price.csv")
+data
+```
+
+```{r}
+dt <- data[, c("Date", "Price")]
+dt <- dt[1:126, ]
+dt
+```
+
+# Eksplorasi Data
+
+```{r}
+str(dt)
+```
+
+```{r}
+dt$Date <- as.Date(dt$Date, format = "%m/%d/%Y")
+dt$Price <- as.numeric(gsub(",", "", dt$Price))
+```
+
+```{r}
+View(dt)
+str(dt)
+```
+
+```{r}
+dim(dt)
+```
+
+```{r}
+dt.ts <- ts(dt$Price)
+```
+
+```{r}
+summary(dt.ts)
+```
+
+## Plot Deret Waktu
+
+```{r}
+ts.plot(dt.ts, xlab="Time Period ", ylab="Price", 
+        main = "Time Series Plot")
+points(dt.ts)
+```
+
+Plot menunjukkan adanya indikasi pola tren pada data sehingga metode peramalan yang digunakan adalah Double Moving Average dan Double Smoothing Exponential
+
+# Pembagian Data
+
+```{r}
+# hitung jumlah data
+n <- nrow(dt)
+
+# tentukan batas 90%
+n_train <- floor(0.9 * n)
+
+# bagi data
+training <- dt[1:n_train, ]
+testing  <- dt[(n_train+1):n, ]
+
+# ubah ke time series
+train.ts <- ts(training$Price)
+test.ts  <- ts(testing$Price)
+```
+
+Pembagian data latih dan data uji yang digunakan adalah 90% : 10% dikarenakan pola data tren yg secara konstan meningkat kemudian turun secara tiba-tiba sehingga diputuskan untuk membuat proporsi data latih lebih banyak
+
+```{r}
+ggplot() + 
+  geom_line(data = training, aes(x = Date, y = Price, col = "Data Latih")) +
+  geom_line(data = testing, aes(x = Date, y = Price, col = "Data Uji")) +
+  labs(x = "Periode Waktu", y = "Sales", color = "Legend") +
+   scale_colour_manual(name="Keterangan:", breaks = c("Data Latih", "Data Uji"),
+                      values = c("blue", "red")) + 
+  theme_bw() + theme(legend.position = "bottom",
+                     plot.caption = element_text(hjust=0.5, size=12))
+```
+
+## Plot Data Latih
+
+```{r}
+plot(train.ts, col="blue",main="Plot data latih")
+points(train.ts)
+```
+
+## Plot Data Uji
+
+```{r}
+#eksplorasi data uji
+plot(test.ts, col="red",main="Plot data uji")
+points(test.ts)
+```
+
+# Double Moving Average (DMA)
+
+```{r}
+dt.sma<-SMA(train.ts, n=4)
+dt.sma
+```
+
+```{r}
+dma <- SMA(dt.sma, n = 4)
+At <- 2*dt.sma - dma
+Bt <- 2/(4-1)*(dt.sma - dma)
+data.dma <- At+Bt
+data.ramal <- c(NA, data.dma)
+
+h <- 13
+t = 1:h
+f = c()
+
+for (i in t) {
+  f[i] = At[length(At)] + Bt[length(Bt)]*i
+}
+
+data.gab <- cbind(
+  aktual = c(dt.ts),
+  pemulusan1 = c(dt.sma, rep(NA,h)),
+  pemulusan2 = c(dma, rep(NA,h)),
+  At = c(At, rep(NA,h)),
+  Bt = c(Bt, rep(NA,h)),
+  ramalan = c(data.ramal, f[-1])
+)
+
+data.gab
+```
+
+```{r}
+ts.plot(dt.ts, xlab="Time Period ", ylab="Price", main= "DMA N = 4 Data Price")
+points(dt.ts)
+lines(data.gab[,3],col="green",lwd=2)
+lines(data.gab[,6],col="red",lwd=2)
+legend("topleft",c("Data aktual","Data pemulusan","Data peramalan"), lty=8, col=c("black","green","red"), cex=0.8)
+```
+
+## Akurasi Data Latih
+
+```{r}
+error_train.dma = train.ts-data.ramal[1:length(train.ts)]
+
+SSE_train.dma = sum(error_train.dma[8:length(train.ts)]^2)
+MSE_train.dma = mean(error_train.dma[8:length(train.ts)]^2)
+MAPE_train.dma = mean(abs((error_train.dma[8:length(train.ts)]/train.ts[8:length(train.ts)])*100))
+
+akurasi_train.dma <- matrix(c(SSE_train.dma, MSE_train.dma, MAPE_train.dma))
+row.names(akurasi_train.dma)<- c("SSE", "MSE", "MAPE")
+colnames(akurasi_train.dma) <- c("Akurasi m = 4")
+akurasi_train.dma
+```
+
+Perhitungan akurasi pada data latih menggunakan nilai MAPE menghasilkan nilai MAPE sekitar 11% sehingga dikategorikan  baik
+
+## Akurasi Data Uji
+
+```{r}
+error_test.dma = test.ts-data.gab[114:126,6]
+SSE_test.dma = sum(error_test.dma^2)
+MSE_test.dma = mean(error_test.dma^2)
+MAPE_test.dma = mean(abs((error_test.dma/test.ts*100)))
+
+akurasi_test.dma <- matrix(c(SSE_test.dma, MSE_test.dma, MAPE_test.dma))
+row.names(akurasi_test.dma)<- c("SSE", "MSE", "MAPE")
+colnames(akurasi_test.dma) <- c("Akurasi m = 4")
+akurasi_test.dma
+```
+
+Perhitungan akurasi pada data uji menggunakan nilai MAPE menghasilkan nilai MAPE sekitar 30% sehingga dikategorikan cukup baik
+
+# Double Exponential Smoothing
+
+## Lamda 0.2 dan Alpha 0.5
+
+```{r}
+des1 <- HoltWinters(train.ts, gamma = FALSE, beta = 0.2, alpha = 0.5)
+des1
+```
+
+```{r}
+plot(des1)
+```
+
+```{r}
+ramalandes1 <- forecast(des1, h=13)
+ramalandes1
+```
+
+```{r}
+plot(dt.ts)
+lines(des1$fitted[,1], lty=2, col="blue")
+lines(ramalandes1$mean, col="red")
+```
+
+## Lamda dan Gamma Optimum
+
+```{r}
+desopt<- HoltWinters(train.ts, gamma = FALSE)
+desopt
+```
+
+```{r}
+plot(desopt)
+```
+
+```{r}
+ramalandesopt<- forecast(desopt, h = 13)
+ramalandesopt
+```
+
+## Akurasi Data Latih
+
+### Lamda 0.2 dan Gamma 0.5
+
+```{r}
+ssedes.train1 <- des1$SSE
+msedes.train1 <- ssedes.train1/length(train.ts)
+sisaandes1 <- ramalandes1$residuals
+head(sisaandes1)
+```
+
+```{r}
+mapedes.train1 <- sum(abs(sisaandes1[3:length(train.ts)]/train.ts[3:length(train.ts)])
+                      *100)/length(train.ts)
+
+akurasides1 <- matrix(c(ssedes.train1, msedes.train1, mapedes.train1))
+row.names(akurasides1)<- c("SSE", "MSE", "MAPE")
+colnames(akurasides1) <- c("Akurasi Data Latih DES1")
+akurasides1
+```
+
+### Lamda dan Gamma Optimum
+
+```{r}
+ssedes.trainopt <- desopt$SSE
+msedes.trainopt <- ssedes.trainopt/length(train.ts)
+sisaandesopt <- ramalandesopt$residuals
+head(sisaandesopt)
+```
+
+```{r}
+mapedes.trainopt <- sum(abs(sisaandesopt[3:length(train.ts)]/train.ts[3:length(train.ts)])
+                      *100)/length(train.ts)
+
+akurasidesopt <- matrix(c(ssedes.trainopt, msedes.trainopt, mapedes.trainopt))
+row.names(akurasidesopt)<- c("SSE", "MSE", "MAPE")
+colnames(akurasidesopt) <- c("Akurasi Data Latih DES_Opt")
+akurasidesopt
+```
+
+## Akurasi Data Uji
+
+### Lamda 0.2 dan Gamma 0.5
+
+```{r}
+selisihdes1 <- ramalandes1$mean-testing$Price
+selisihdes1
+```
+
+```{r}
+SSEtestingdes1 <- sum(selisihdes1^2)
+MSEtestingdes1 <- SSEtestingdes1/length(testing$Price)
+MAPEtestingdes1 <- sum(abs(selisihdes1/testing$Price)*100)/length(testing$Price)
+```
+
+### Lamda dan Gamma Optimum
+
+```{r}
+selisihdesopt <- ramalandesopt$mean-testing$Price
+selisihdesopt
+```
+
+```{r}
+SSEtestingdesopt <- sum(selisihdesopt^2)
+MSEtestingdesopt <- SSEtestingdesopt/length(testing$Price)
+MAPEtestingdesopt <- sum(abs(selisihdesopt/testing$Price)*100)/length(testing$Price)
+```
+
+```{r}
+akurasitestingdes <-
+  matrix(c(SSEtestingdes1,MSEtestingdes1,MAPEtestingdes1,
+           SSEtestingdesopt,MSEtestingdesopt,MAPEtestingdesopt),
+         nrow=3,ncol=2)
+row.names(akurasitestingdes)<- c("SSE", "MSE", "MAPE")
+colnames(akurasitestingdes) <- c("DES1","DES_Opt")
+akurasitestingdes
+```
+
+Berdasarkan akurasi data uji, diperoleh bahwa MAPE yg paling kecil adalah DES 1 dengan Lamda 0.2 dan Gamma 0.5, yaitu sekitar 13% sehingga peramalan sudah dapat dikategorikan baik
+
+# Kesimpulan
+
+Metode terbaik dalam peramalan data ini adalah **Double Smoothing Exponential (DSE)** dengan dengan Lamda 0.2 dan Gamma 0.5 dan memiliki nilai error terkecil berupa **MAPE** sebesar **13.8%**
