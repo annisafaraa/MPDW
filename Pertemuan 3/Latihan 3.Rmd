@@ -1,1 +1,413 @@
+---
+title: "MPDW P3"
+author: "Farah Annisa Mahmud"
+date: "`r Sys.Date()`"
+output: html_document
+---
 
+# Library
+
+```{r}
+library(dplyr)
+library(TTR)
+library(forecast)
+library(lmtest)
+library(orcutt) 
+library(HoRM)
+library(readxl) 
+```
+
+# Import Data
+
+Data yang digunakan adalah data IPM Kabupaten Mamuju tahun 2010-2024
+
+```{r}
+data <- read_xlsx("D:\\smt 5\\mpdw\\Data IPM.xlsx")
+data
+```
+
+# Eksplorasi Data
+
+```{r}
+# Membentuk objek time series
+dt.ts<-ts(data$IPM)
+dt.ts
+```
+
+## Plot Time Series
+
+```{r}
+ts.plot(dt.ts, xlab="Time Period ", ylab="IPM", main= "Time Series Plot of IPM")
+points(dt.ts)
+```
+
+Plot menunjukkan adanya indikasi pola tren pada data sehingga akan dilakukan peramalan dan pemulusan dengan metode DMA dan DES
+
+## Double Moving Average (DMA)
+
+```{r}
+dt.sma <- SMA(dt.ts, n=3)
+dma <- SMA(dt.sma, n = 3)
+At <- 2*dt.sma - dma
+Bt <- 2/(3-1)*(dt.sma - dma)
+dt.dma<- At+Bt
+dt.ramal<- c(NA, dt.dma)
+
+t = 1:5
+f = c()
+
+for (i in t) {
+  f[i] = At[length(At)] + Bt[length(Bt)]*(i)
+}
+```
+
+```{r}
+dt.gab <- cbind(aktual = c(dt.ts,rep(NA,5)), 
+                pemulusan1 = c(dt.sma,rep(NA,5)),
+                pemulusan2 = c(dt.dma, rep(NA,5)),
+                At = c(At, rep(NA,5)), 
+                Bt = c(Bt,rep(NA,5)),
+                ramalan = c(dt.ramal, f[-1]))
+dt.gab
+```
+
+### Plot Time Series
+
+```{r}
+ts.plot(dt.gab[,1], xlab="Time Period ", ylab="IPM", 
+        main= "DMA N = 3 Data IPM", ylim=c(62,75))
+points(dt.gab[,1])
+points(dt.gab[,3])
+points(dt.gab[,6])
+lines(dt.gab[,3],col="green",lwd=2)
+lines(dt.gab[,6],col="red",lwd=2)
+legend("topleft",c("data aktual","data pemulusan","data peramalan"), 
+       lty=8, col=c("black","green","red"), cex=0.8)
+```
+
+### Akurasi Metode DMA
+
+```{r}
+error.dma = dt.ts-dt.ramal[1:length(dt.ts)]
+SSE.dma = sum(error.dma[6:length(dt.ts)]^2)
+MSE.dma = mean(error.dma[6:length(dt.ts)]^2)
+MAPE.dma = mean(abs((error.dma[6:length(dt.ts)]/dt.ts[6:length(dt.ts)])*100))
+
+akurasi.dma <- matrix(c(SSE.dma, MSE.dma, MAPE.dma))
+row.names(akurasi.dma)<- c("SSE", "MSE", "MAPE")
+colnames(akurasi.dma) <- c("Akurasi m = 3")
+akurasi.dma
+```
+
+Didapatkan error paling kecil sebesar 0,75 berdasarkan MSE sehingga dapat dikatakan bahwa model sangat baik
+
+## Double Exponential Smoothing (DES)
+
+### Pembagian Data
+
+```{r}
+training<-data[1:10,2]
+testing<-data[11:15,2]
+
+training.ts<-ts(training)
+testing.ts<-ts(testing,start=11)
+```
+
+### Plot Data Training
+
+```{r}
+plot(training.ts, col="blue",main="Plot data training")
+points(training.ts)
+```
+
+### Plot Data Testing
+
+```{r}
+plot(testing.ts, col="red",main="Plot data testing")
+points(testing.ts)
+```
+
+### DES dengan Lamda & Gamma Optimum
+
+```{r}
+des.opt<- HoltWinters(training.ts, gamma = FALSE)
+des.opt
+```
+
+```{r}
+plot(des.opt)
+legend("topleft", c("Data Aktual", "Peramalan"), col = c("black", "red"), 
+       lty = c(1,1))
+```
+
+```{r}
+ramalandesopt<- forecast(des.opt, h=7)
+ramalandesopt
+```
+
+### Akurasi Metode DES
+
+#### Akurasi Data Training
+
+```{r}
+ssedes.train<-des.opt$SSE
+msedes.train<-ssedes.train/length(training.ts)
+sisaandes<-ramalandesopt$residuals
+head(sisaandes)
+```
+
+```{r}
+mapedes.train <- sum(abs(sisaandes[3:length(training.ts)]/training.ts[3:length(training.ts)])*100)/length(training.ts)
+
+akurasides.opt <- matrix(c(ssedes.train,msedes.train,mapedes.train))
+row.names(akurasides.opt)<- c("SSE", "MSE", "MAPE")
+colnames(akurasides.opt) <- c("Akurasi lamda dan gamma optimum")
+akurasides.opt
+```
+
+#### Akurasi Data Testing
+
+```{r}
+selisihdesopt<-ramalandesopt$mean-testing.ts
+selisihdesopt
+```
+
+```{r}
+SSEtestingdesopt<-sum(selisihdesopt^2)
+SSEtestingdesopt<-SSEtestingdesopt/length(testing.ts)
+MAPEtestingdesopt<-sum(abs(selisihdesopt/testing.ts)*100)/length(testing.ts)
+
+akurasiDesTesting <- matrix(c(SSEtestingdesopt,SSEtestingdesopt,MAPEtestingdesopt))
+row.names(akurasiDesTesting)<- c("SSE", "MSE", "MAPE")
+colnames(akurasiDesTesting) <- c("Akurasi lamda dan gamma optimum")
+akurasiDesTesting
+```
+
+### Perbandingan Akurasi Metode DMA dengan DES
+
+```{r}
+cbind(akurasi.dma, akurasides.opt)
+```
+
+Berdasarkan perbandingan akurasi tersebut, terlihat nilai SSE, MSE, dan MAPE metode DES lebih kecil dibandingkan dengan metode DMA. Oleh karena itu, metode peramalan dan pemulusan yang terbaik antara keduanya adalah dengan metode DES.
+
+## Eksplorasi dengan Scatter Plot
+
+```{r}
+plot(data$Tahun, data$IPM, pch = 20, col = "blue",
+     main = "Scatter Plot Tahun vs Nilai IPM",
+     xlab = "Tahun",
+     ylab = "Nilai IPM")
+```
+
+## Nilai Korelasi
+
+```{r}
+cor(data$Tahun, data$IPM)
+```
+
+Berdasarkan scatter plot di atas terlihat adanya hubungan / korelasi positif antara peubah tahun dengan nilai IPM, terlihat titik-titik pada plot yang naik ke arah kanan atas. Hal tersebut juga diperkuat dengan hasil perhitungan aplikasi R di mana didapatkan nilai korelasi sebesar **0,9669153**.
+
+# Pemodelan Regresi
+
+```{r}
+model<- lm(IPM~Tahun, data = data)
+summary(model)
+```
+
+Didapatkan model regresi dengan persamaan $$y_i = -1100 + 0,5785 x_t $$ Berdasarkan ringkasan model dapat diketahui bahwa hasil uji F memiliki p-value \< α (5%). Artinya, minimal terdapat satu variabel yang berpengaruh nyata terhadap model. Hasil uji-t parsial kedua parameter regresi, yaitu intersep dan koefisien regresi juga menunjukkan hal yang sama, yaitu memiliki p-value \< α (5%) sehingga nyata dalam taraf 5%. Selanjutnya dapat dilihat juga nilai $R^2 = 0.9349$. Artinya, sebesar 93,49% keragaman nilai IPM dapat dijelaskan oleh peubah tahun. Hasil ini menunjukkan hasil yang dapat dikatakan sangat baik Namun, diperlukan juga melakukan uji terhadap sisaannya.
+
+# Uji Normalitas dan Autokrelasi
+
+## Secara Eksploratif
+
+```{r}
+#sisaan dan fitted value
+sisaan<- residuals(model)
+fitValue<- predict(model)
+
+#Diagnostik dengan eksploratif
+par(mfrow = c(2,2))
+qqnorm(sisaan)
+qqline(sisaan, col = "steelblue", lwd = 2)
+plot(fitValue, sisaan, col = "steelblue", pch = 20, xlab = "Sisaan", ylab = "Fitted Values", main = "Sisaan vs Fitted Values")
+abline(a = 0, b = 0, lwd = 2)
+hist(sisaan, col = "steelblue")
+plot(seq(1,15,1), sisaan, col = "steelblue", pch = 20, xlab = "Sisaan", ylab = "Order", main = "Sisaan vs Order")
+lines(seq(1,15,1), sisaan, col = "red")
+abline(a = 0, b = 0, lwd = 2)
+```
+
+Berdasarkan Normal QQ Plot, sisaan cenderung menyebar normal, tetapi histogram dari sisaan tidak menunjukkan demikian. Plot Sisaan vs Fitted Value dan Plot Sisaan vs Order menunjukkan adanya pola pada sisaan sehingga dapat dikatakan ada indikasi autokorelasi. Untuk lebih lanjut akan digunakan uji formal melihat normalitas sisaan dan plot ACF dan PACF untuk melihat apakah ada autokorelasi atau tidak.
+
+## Uji Formal
+
+**Hipotesis asumsi normalitas**
+
+$H_0$: sisaan mengikuti sebaran normal
+
+$H_1$: sisaan tidak mengikuti sebaran normal
+
+```{r}
+shapiro.test(sisaan)
+```
+
+```{r}
+ks.test(sisaan, "pnorm", mean=mean(sisaan), sd=sd(sisaan))
+```
+
+Berdasarkan uji formal Saphiro-Wilk didapatkan nilai p-value \< α (5%), sementara uji formal Kolmogorov-Smirnov didapatkan nilai p-value \> α (5%).
+
+**Hipotesis asumsi autokorelasi**
+
+$H_0$: tidak ada autokorelasi
+
+$H_1$: ada autokorelasi
+
+```{r}
+#ACF dan PACF identifikasi autokorelasi
+par(mfrow = c(1,2))
+acf(sisaan)
+pacf(sisaan)
+```
+
+Berdasarkan plot ACF dan PACF, terlihat semua dalam rentang batas dan tidak ada lag yang signifikan. Namun, untuk lebih memastikan akan dilakukan uji formal dengan uji Durbin Watson.
+
+```{r}
+dwtest(model)
+```
+
+Dengan nilai p-value \< 0.05 dapat disimpulkan bahwa tolak $H_0$, cukup bukti mengatakan adanya autokorelasi. Oleh karena itu, diperlukan penangan autokorelasi. Penanganan yang akan digunakan menggunakan dua metode, yaitu Cochrane-Orcutt dan Hildret-Lu.
+
+# Penanganan Autokorelasi
+
+## Metode Cochrane-Orcutt
+
+```{r}
+modelCO<-cochrane.orcutt(model)
+modelCO
+```
+
+Didapatkan model regresi dengan persamaan $$y_i = -1007,205175 + 0,532399 x_t $$Hasil juga menunjukkan bahwa nilai DW dan p-value meningkat menjadi **2,24940** dan **0,5637**. Nilai p-value \> 0.05 menunjukkan bahwa belum cukup bukti menyatakan bahwa sisaan terdapat autokorelasi pada taraf nyata 5%. Untuk nilai $\hat{\rho}$ optimum yang digunakan adalah **0,380316**.
+
+```{r}
+# Rho optimum
+rho <- modelCO$rho
+rho
+```
+
+
+Selanjutnya akan dilakukan transformasi secara manual dengan syntax berikut ini.
+
+```{r}
+data$IPM
+```
+
+```{r}
+data$IPM[-1]
+```
+
+```{r}
+# Transformasi Manual
+ipm.trans<- data$IPM[-1]-data$IPM[-12]*rho
+tahun.trans<- data$Tahun[-1]-data$Tahun[-12]*rho
+modelCOmanual<- lm(ipm.trans~tahun.trans)
+summary(modelCOmanual)
+```
+
+Hasil model transformasi bukan merupakan model sesungguhnya. Koefisien regresi masih perlu dicari kembali mengikuti 
+$$\beta_0^* = \beta_0 + \hat{\rho}\beta_0 \quad \text{dan} \quad \beta_1^* = \beta_1$$
+
+```{r}
+#Mencari Penduga Koefisien Regresi setelah Transformasi ke Persamaan Awal
+b0bintang <- modelCOmanual$coefficients[-2]
+b0 <- b0bintang/(1-rho)
+b1 <- modelCOmanual$coefficients[-1]
+b0
+```
+
+```{r}
+b1
+```
+
+Sehingga didapatkan model regresi dengan persamaan $$y_i = -993.4029 + 0.5255492  x_t $$\
+
+## Metode Hildreth-Lu
+
+```{r}
+hildreth.lu.func<- function(r, model){
+  x <- model.matrix(model)[,-1]
+  y <- model.response(model.frame(model))
+  n <- length(y)
+  t <- 2:n
+  y <- y[t]-r*y[t-1]
+  x <- x[t]-r*x[t-1]
+  
+  return(lm(y~x))
+}
+
+#Pencariab rho yang meminimumkan SSE
+r <- c(seq(0.1,0.9, by= 0.1))
+tab <- data.frame("rho" = r, "SSE" = sapply(r, function(i){deviance(hildreth.lu.func(i, model))}))
+round(tab, 4)
+```
+
+Pada hasil di atas terlihat $\rho$ minimum ketika 0,4. Namun, hasil tersebut masih kurang teliti sehingga akan dicari kembali $\rho$ yang lebih optimum dengan ketelitian yang lebih. Jika sebelumnya jarak antar $\rho$ yang dicari adalah 0,1, kali ini jarak antar $\rho$ adalah 0,001 dan dilakukan pada selang 0,2 sampai dengan 0,5.
+
+```{r}
+#Rho optimal di sekitar 0.4
+rOpt <- seq(0.2,0.5, by= 0.001)
+tabOpt <- data.frame("rho" = rOpt, "SSE" = sapply(rOpt, function(i){deviance(hildreth.lu.func(i, model))}))
+head(tabOpt[order(tabOpt$SSE),])
+```
+
+```{r}
+#Grafik SSE optimum
+par(mfrow = c(1,1))
+plot(tab$SSE ~ tab$rho , type = "l", xlab = "Rho", ylab = "SSE")
+abline(v = tabOpt[tabOpt$SSE==min(tabOpt$SSE),"rho"], lty = 2, col="red",lwd=2)
+text(x = 0.380	, y = 4.724425	, labels = "rho = 0.380", cex = 0.8)
+```
+
+Perhitungan yang dilakukan aplikasi R menunjukkan bahwa nilai $\rho$ optimum, yaitu saat SSE terkecil terdapat pada nilai $\rho$ = 0,380. Hal tersebut juga ditunjukkan pada plot.
+
+```{r}
+#Model terbaik
+modelHL <- hildreth.lu.func(0.341, model)
+summary(modelHL)
+```
+
+```{r}
+#Transformasi Balik
+cat("y = ", coef(modelHL)[1]/(1-0.341), "+", coef(modelHL)[2],"x", sep = "")
+```
+
+Sehingga didapatkan model regresi dengan persamaan $$ y_i = -1013.384 + 0.5354568 x_t $$
+
+```{r}
+#Deteksi autokorelasi
+dwtest(modelHL)
+```
+
+Hasil uji Durbin-Watson menunjukkan bahwa nilai p-value sebesar 0.09404, di mana p-value \> α =5% sehingga tak tolak $H_0$ atau belum cukup bukti menyatakan bahwa ada autokorelasi dalam data nilai IPM dengan metode Hildreth-Lu pada taraf nyata 5%.
+
+```{r}
+# Perbandingan
+sseModelawal <- anova(model)$`Sum Sq`[-1]
+sseModelCO <- anova(modelCOmanual)$`Sum Sq`[-1]
+sseModelHL <- anova(modelHL)$`Sum Sq`[-1]
+mseModelawal <- sseModelawal/length(data$IPM)
+mseModelCO <- sseModelCO/length(data$IPM)
+mseModelHL <- sseModelHL/length(data$IPM)
+akurasi <- matrix(c(sseModelawal,sseModelCO,sseModelHL,
+                    mseModelawal,mseModelCO,mseModelHL),nrow=2,ncol=3,byrow = T)
+colnames(akurasi) <- c("Model Awal", "Model Cochrane-Orcutt", "Model Hildreth-Lu")
+row.names(akurasi) <- c("SSE","MSE")
+akurasi
+```
+
+Berdasarkan hasil tersebut dapat diketahui bahwa hasil penanganan autokorelasi dengan metode Cochrane-Orcutt dan Hildreth-Lu memiliki SSE dan MSE yang tidak jauh berbeda dan juga lebih baik dibandingkan model awal ketika autokorelasi masih terjadi.
+
+# Kesimpulan
+
+Autokorelasi yang terdapat pada data IPM terjadi akibat adanya korelasi di antara unsur penyusunnya. Indikator IPM yang erat hubungannya dengan perekonomian sangat rawan menjadi penyebab adanya autokorelasi. Adanya autokorelasi menyebabkan model regresi kurang baik karena akan meingkatkan galatnya. Autokorelasi dapat dideteksi secara eksploratif melalui plot sisaan, ACF, dan PACF, serta dengan uji formal Durbin-Watson. Namun, autokorelasi tersebut dapat ditangani dengan metode Cochrane-Orcutt dan Hildreth-Lu. Kedua metode menghasilkan nilai SSE dan MSE yang tidak jauh berbeda, artinya keduanya baik untuk digunakan.
