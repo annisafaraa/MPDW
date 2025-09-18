@@ -1,1 +1,305 @@
+---
+title: "MPDW P3 - AQI"
+author: "Farah Annisa Mahmud"
+date: "`r Sys.Date()`"
+output: 
+  rmdformats::readthedown
+---
 
+# Library
+
+```{r}
+library(dLagM)
+library(dynlm)
+library(MLmetrics)
+library(lmtest)
+library(car)
+library(readr)
+```
+
+# Data
+
+```{r}
+data <- read.csv("D:\\smt 5\\mpdw\\NewDelhi_Air_quality.csv")
+data
+```
+
+```{r}
+df <- data[c("AQI", "o3")]
+df
+```
+
+# Pembagian Data
+
+```{r}
+train <- df[1:57,] # 80%
+test <- df[58:72,] # 20%
+```
+
+```{r}
+# Ubah ke data time series
+train.ts <- ts(train)
+test.ts <- ts(test)
+data.ts <- ts(df)
+```
+
+# Model Koyck
+
+## Pemodelan
+
+```{r}
+model.koyck <- koyckDlm(x = train$o3, y = train$AQI)
+summary(model.koyck)
+```
+
+```{r}
+AIC(model.koyck)
+```
+
+```{r}
+BIC(model.koyck)
+```
+
+Dari hasil tersebut, didapat bahwa peubah $x_t$ dan $y_{t−1}$ memiliki nilai P−Value \< 0.05. Hal ini menunjukkan bahwa peubah $x_t$ dan $y_{t−1}$ berpengaruh signifikan terhadap y. Adapun model keseluruhannya adalah sebagai berikut
+
+$\hat{Y_t}=  0.54798 + 0.25830X_t + 0.41955Y_{t−1}$
+
+## Peramalan dan Akurasi
+
+```{r}
+fore.koyck <- forecast(model = model.koyck, x = test$o3, h = 15)
+fore.koyck
+```
+
+```{r}
+# Akurasi data test
+mape.koyck <- MAPE(fore.koyck$forecasts, test$AQI)
+mape.koyck #data test
+```
+
+```{r}
+# Akurasi data train
+GoF(model.koyck)
+```
+
+Model Koyck memiliki akurasi yang sangat tinggi, dilihat melalui nilai MAPE < 10% pada data training maupun data testing.
+
+# Regression with Distributed Lag
+
+## Pemodelan (Lag = 2)
+
+```{r}
+model.dlm <- dlm(x = train$o3,y = train$AQI , q = 2)
+summary(model.dlm)
+```
+
+```{r}
+AIC(model.dlm)
+```
+
+```{r}
+BIC(model.dlm)
+```
+
+Dari hasil diatas, didapat bahwa p−value dari $x_t$ < 0.05. Hal ini menunjukkan bahwa $x_t$ berpengaruh signifikan terhadap y. Adapun model keseluruhan yang terbentuk adalah sebagai berikut
+
+$\hat{Y_t} = -0.052782 + 0.476379X_t - 0.005756X_{t−1} - 0.008392X_{t−2}$
+
+### Peramalan dan Akurasi
+
+```{r}
+fore.dlm <- forecast(model = model.dlm, x = test$o3, h = 15)
+fore.dlm
+```
+
+```{r}
+# Akurasi data test
+mape.dlm <- MAPE(fore.dlm$forecasts, test$AQI)
+mape.dlm
+```
+
+```{r}
+# Akurasi data train
+GoF(model.dlm)
+```
+
+Model memiliki akurasi yang sangat tinggi, dilihat melalui nilai MAPE < 10% pada data training maupun data testing.
+
+## Pemodelan (Lag Optimum)
+
+```{r}
+# Penentuan lag optimum 
+finiteDLMauto(formula = AQI ~ o3,
+              data = data.frame(train), q.min = 1, q.max = 10,
+              model.type = "dlm", error.type = "AIC", trace = TRUE)
+```
+
+Berdasarkan output tersebut, lag optimum didapatkan ketika lag = 10. Selanjutnya dilakukan pemodelan untuk lag = 10
+
+```{r}
+# Model dlm dengan lag optimum
+model.dlm2 <- dlm(x = train$o3,y = train$AQI , q = 10)
+summary(model.dlm2)
+```
+
+```{r}
+AIC(model.dlm2)
+```
+
+```{r}
+BIC(model.dlm2)
+```
+
+Dari hasil tersebut terdapat beberapa peubah yang berpengaruh signifikan terhadap taraf nyata 5% yaitu $x_t$, $x_{t−7}$, $x_{t−8}$, $x_{t−9}$, dan $x_{t−10}$. Adapun keseluruhan model yang terbentuk adalah
+
+$\hat{Y_t} = -0.294780 + 0.405638X_t + 0.159000X_{t-1} - 0.052741X{t-2} − 0.14862X_{t−3} + 0.14354X_{t−4} − 0.00705X_{t−5} − 0.12768X_{t−6} + 0.28782X_{t−7} − 0.39944X_{t−8} + 0.30415X_{t−9} − 0.09896X_{t−10}$
+
+### Peramalan dan Akurasi
+
+```{r}
+fore.dlm2 <- forecast(model = model.dlm2, x = test$o3, h = 15)
+fore.dlm2
+```
+
+```{r}
+# Akurasi data test
+mape.dlm2<- MAPE(fore.dlm2$forecasts, test$AQI)
+mape.dlm2
+```
+
+```{r}
+# Akurasi data train
+GoF(model.dlm2)
+```
+
+Model memiliki akurasi yang sangat tinggi, dilihat melalui nilai MAPE < 10% pada data training maupun data testing.
+
+# Model Autoregressive
+
+## Pemodelan (p = 1 dan q = 1)
+
+```{r}
+model.ardl <- ardlDlm(formula = AQI ~ o3, data = train, p = 1, q = 1)
+summary(model.ardl)
+```
+
+```{r}
+AIC(model.ardl)
+```
+
+```{r}
+BIC(model.ardl)
+```
+
+Dari hasil tersebut, diperoleh bahwa peubah $x_t$, $x_{t−1}$, dan $y_{t−1}$ memiliki p-value < 0.05. Hal ini menunjukkan bahwa peubah $x_t$, $x_{t−1}$, dan $y_{t−1}$ berpengaruh signifikan terhadap y. Adapun model keseluruhannya sebagai berikut:
+
+$\hat{Y_t} = −0.14906 + 0.47821X_t − 0.22331X_{t−1} + 0.45264Y_{t−1}$
+
+### Peramalan dan Akurasi
+
+```{r}
+fore.ardl <- forecast(model = model.ardl, x = test$o3, h = 15)
+fore.ardl
+```
+```{r}
+# Akurasi data test
+mape.ardl <- MAPE(fore.ardl$forecasts, test$AQI)
+mape.ardl
+```
+
+```{r}
+# Akurasi data train
+GoF(model.ardl)
+```
+
+Model memiliki akurasi yang sangat tinggi, dilihat melalui nilai MAPE < 10% pada data training maupun data testing.
+
+## Pemodelan lag Optimum
+
+```{r}
+# Penentuan lag optimum
+model.ardl.opt <- ardlBoundOrders(data = data.frame(df), ic = "AIC", 
+                                  formula = AQI ~ o3)
+model.ardl.opt
+```
+
+```{r}
+min_p=c()
+for(i in 1:15){
+  min_p[i]=min(model.ardl.opt$Stat.table[[i]])
+}
+q_opt=which(min_p==min(min_p, na.rm = TRUE))
+p_opt=which(model.ardl.opt$Stat.table[[q_opt]] == 
+              min(model.ardl.opt$Stat.table[[q_opt]], na.rm = TRUE))
+data.frame("q_optimum" = q_opt, "p_optimum" = p_opt, 
+           "AIC"=model.ardl.opt$min.Stat)
+```
+
+Dari tabel di atas, dapat terlihat bahwa nilai AIC terendah didapat ketika p = 13 dan q = 2, yaitu sebesar 16.55044. Artinya, model autoregressive optimum didapat ketika p = 13 dan q = 2.
+
+```{r}
+# Pemodelan p = 13 dan q = 2
+model.ardl2 <- ardlDlm(formula = AQI ~ o3, 
+                         data = train, p = 13 ,q = 2)
+summary(model.ardl2)
+```
+
+Dari hasil tersebut, diperoleh bahwa peubah $x_t$ dan $x_{t−8} memiliki p-value < 0.05. Hal ini menunjukkan bahwa peubah $x_t$ dan $x_{t−8}$, berpengaruh signifikan terhadap y. Adapun model keseluruhannya sebagai berikut:
+
+$\hat{Y_t} = -0.77136 + 0.39407X_t + 0.20786X_{t−1} - 0.02966X_{t-2} + ... - 0.12772Y_{t−1} + 0.06633Y_{t-2}$
+
+### Permalan dan Akurasi
+
+```{r}
+fore.ardl2 <- forecast(model = model.ardl2, x = test$o3, h = 15)
+fore.ardl2
+```
+
+```{r}
+# Akurasi data test
+mape.ardl2<- MAPE(fore.ardl2$forecasts, test$AQI)
+mape.ardl2
+```
+
+```{r}
+# Akurasi data train
+GoF(model.ardl2)
+```
+
+Model memiliki akurasi yang sangat tinggi, dilihat melalui nilai MAPE < 10% pada data training maupun data testing.
+
+# Perbandingan Model
+
+```{r}
+akurasi <- matrix(c(mape.koyck, mape.dlm, mape.dlm2, mape.ardl, mape.ardl2))
+row.names(akurasi)<- c("Koyck","DLM Lag = 2","DLM Opt","Autoregressive p = 1 dan q = 1", "Autoregressive Opt")
+colnames(akurasi) <- c("MAPE")
+akurasi
+```
+
+Berdasarkan nilai MAPE, model paling optimum didapat pada Model DLM dengan lag =  karena memiliki nilai MAPE yang terkecil.
+
+## Plot
+
+```{r}
+plot(test$o3, test$AQI, type="b", col="black", ylim=range(c(test$AQI,
+                                                           fore.koyck$forecasts,
+                                                           fore.dlm$forecasts,
+                                                           fore.dlm2$forecasts,
+                                                           fore.ardl$forecasts,
+                                                           fore.ardl2$forecasts)),
+     xlab="o3", ylab="AQI")
+
+lines(test$o3, fore.koyck$forecasts, col="red", type="b")
+lines(test$o3, fore.dlm$forecasts, col="blue", type="b")
+lines(test$o3, fore.dlm2$forecasts, col="orange", type="b")
+lines(test$o3, fore.ardl$forecasts, col="green", type="b")
+lines(test$o3, fore.ardl2$forecasts, col="brown", type="b")
+
+legend("topleft",
+       legend=c("Aktual", "Koyck","DLM Lag 2","DLM Opt","Autoregressive p dan q = 1", "Autoregressive Opt"),
+       col=c("black","red","blue","orange","green","brown"),
+       lty=1, cex=0.8)
+```
+
+Berdasarkan plot perbandingan, terlihat bahwa semua model mampu mengikuti tren data aktual, meskipun dengan tingkat kedekatan yang berbeda. Model DLM Lag 2 (biru) dan Autoregressive p dan q = 1 (hijau) memiliki tren yang paling mendekati data aktual, sementara Model Koyck (merah) terlihat yang paling menyimpang. 
