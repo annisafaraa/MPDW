@@ -1,1 +1,580 @@
+---
+title: "Latihan 4"
+author: "Farah Annisa Mahmud"
+date: "`r Sys.Date()`"
+output: 
+  rmdformats::readthedown
+---
+
+# Proses MA
+
+## Pembangkitan Proses MA(2)
+
+Akan dicoba membangkitkan proses MA(2) dengan $\theta_1 = 0.4$ dan $\theta_2 = 0.6$ sebanyak 300 observasi dan $c=0$. Karena diperlukan dua nilai awal untuk $e_{t-1}$ dan $e_{t-2}$, masukkan dua nilai pertama white noise sebagai nilai awal tersebut.
+
+```{r}
+set.seed(1004)
+wn <- rnorm(300)     # white noise
+
+# Masukkan dua nilai awal
+ma <- wn[1]
+ma[2] <- wn[2] + 0.4 * wn[1]
+```
+
+Nilai-nilai selanjutnya dapat dicari melalui *loop*. Bentuk loop dapat dilihat dari rumus MA(2) yang hendak dibangkitkan:
+
+$$y_t = e_t + 0.4e_{t-1} + 0.6e_{t-2}$$
+
+```{r}
+for(i in 3:300){
+   ma[i] <- wn[i] + 0.4 * wn[i - 1] + 0.6 * wn[i - 2]
+}
+
+ma
+```
+
+Selain menggunakan cara di atas, pembangkitan proses MA(2) dapat dilakukan dengan fungsi `arima.sim()` sebagai berikut.
+
+```{r}
+set.seed(1004)
+
+ma2 <- arima.sim(list(order = c(0,0,2), ma = c(0.4, 0.6)), n = 300)
+ma2
+
+```
+
+## Karakteristik MA(2)
+
+### Plot Time Series
+
+```{r}
+ts.plot(ma)
+```
+
+Berdasarkan plot time series, terlihat bahwa data MA(1) yang dibangkitkan stasioner dalam rataan
+
+### Plot ACF
+
+```{r}
+acf(ma,lag.max = 20)
+```
+
+Berdasarkan plot ACF tersebut, terlihat bahwa plot ACF *cuts off* di lag kedua
+
+### Plot PACF
+
+```{r}
+pacf(ma)
+```
+
+Berdasarkan plot PACF tersebut, terlihat bahwa plot PACF tidak berhenti pada lag tertentu, tapi nilainya masih muncul di banyak lag meski makin kecil dan kadang acak di sekitar nol, tetapi dapat dikatakan cenderung **tails off**.
+
+### Plot EACF
+
+```{r}
+TSA::eacf(ma)
+```
+
+Berdasarkan pola segitiga nol pada plot EACF, terlihat bahwa segitiga nol berada pada ordo AR(0) dan ordo MA(2).
+
+### Scatterplot Antar Lag
+
+#### Korelasi antara $Y_t$ dengan $Y_{t-1}$
+
+```{r}
+# Yt
+yt_ma <- ma[-1]
+yt_ma
+```
+
+```{r}
+# Yt-1
+yt_1_ma <- ma[-300]
+yt_1_ma
+```
+
+```{r}
+# Scatterplot Yt vs Yt-1
+plot(yt_ma, yt_1_ma,
+     xlab = expression(Y[tt]),
+     ylab = expression(Y[t-1]),
+     main = "Scatterplot: Yt vs Yt-1")
+```
+
+Berdasarkan scatterplot tersebut, terlihat bahwa cenderung terdapat hubungan positif yang sangat lemah antara $Y_t$ dengan $Y_{t−1}$.
+
+```{r}
+cor(yt_ma,yt_1_ma)
+```
+
+Korelasi antara $Y_t$ dengan $Y_{t-1}$ dari hasil simulasi mendekati perhitungan teoritis, yaitu
+
+$$
+\rho_1=\frac{-\theta_1+\theta_1\theta_2}{1+\theta_1^2+\theta_2^2}=\frac{-(-0.4)+(-0.4)(-0.6)}{1+(-0.4)^2+(-0.6)^2}=0.42
+$$
+
+#### Korelasi antara $Y_t$ dengan $Y_{t-2}$
+
+```{r}
+# Yt
+yt_ma2 <- ma[-c(1,2)]
+yt_ma2
+```
+
+```{r}
+# Yt-2
+yt_2_ma <- ma[-c(299,300)]
+yt_2_ma
+```
+
+```{r}
+# Scatterplot Yt vs Yt-2
+plot(yt_ma2, yt_2_ma,
+     xlab = expression(Y[t-2]),
+     ylab = expression(Y[t]),
+     main = "Scatterplot: Yt vs Yt-2")
+```
+
+Berdasarkan scatterplot tersebut, terlihat bahwa cenderung terdapat hubungan positif yang sangat lemah antara $Y_t$ dengan $Y_{t−2}$.
+
+```{r}
+cor(yt_ma2,yt_2_ma)
+```
+
+Korelasi antara $Y_t$ dengan $Y_{t-2}$ dari hasil simulasi mendekati perhitungan teoritis, yaitu
+
+$$
+\rho_1=\frac{-\theta_2}{1+\theta_1^2+\theta_2^2}=\frac{-(-0.6)}{1+(-0.4)^2+(-0.6)^2}=0.39
+$$
+
+#### Korelasi antara $Y_t$ dengan $Y_{t-3}$
+
+```{r}
+# Yt
+yt_ma3 <- ma[-c(1,2,3)]
+yt_ma3
+```
+
+```{r}
+# Yt-3
+yt_3_ma <- ma[-c(298,299,300)]
+yt_3_ma
+```
+
+```{r}
+# Scatterplot Yt vs Yt-3
+plot(yt_ma3, yt_3_ma,
+     xlab = expression(Y[t]),
+     ylab = expression(Y[t-3]),
+     main = "Scatterplot: Yt vs Yt-3")
+
+```
+
+Berdasarkan scatterplot tersebut, terlihat bahwa cenderung tidak terdapat hubungan antara $Y_t$ dengan $Y_{t−3}$.
+
+```{r}
+cor(yt_ma3,yt_3_ma)
+```
+
+Korelasi antara $Y_t$ dengan $Y_{t-3}$ hasil simulasi mendekati teori yang ada, yaitu $$\rho_k=0 \quad \text{untuk } k = 3,4,...$$  .
+
+# Proses AR
+
+## Pembangkitan Proses AR(2)
+
+Akan dicoba membangkitkan proses AR(2) dengan $\phi_1 = 0.5$ dan $\phi_2 = 0.2$ sebanyak 300 observasi dan $c=0$.
+
+Nilai-nilai selanjutnya dapat dicari melalui *loop*. Bentuk loop dapat dilihat dari rumus AR(2) yang hendak dibangkitkan:
+
+$$ Y_t = e_t + 0.5Y_{t-1} + 0.2Y_{t-2} $$
+
+```{r}
+set.seed(1004)
+n <- 300  
+wn <- rnorm(n, mean=0, sd=1)
+ar <- numeric(n)
+
+# nilai awal (pakai white noise pertama & kedua)
+ar[1] <- wn[1]
+ar[2] <- 0.5*ar[1] + wn[2]
+
+# loop AR(2)
+for(i in 3:n){
+  ar[i] <- 0.5*ar[i-1] + 0.2*ar[i-2] + wn[i]
+}
+
+ar
+```
+
+Selain menggunakan cara di atas, pembangkitan proses AR dapat dilakukan dengan fungsi `arima.sim()` sebagai berikut.
+
+```{r}
+ar2 <- arima.sim(
+  list(order = c(2,0,0), ar = c(0.5, 0.2)),
+  n = 300
+)
+ar2
+```
+
+## Karakteristik AR(2)
+
+### Plot Time Series
+
+```{r}
+ts.plot(ar)
+```
+
+Berdasarkan plot time series tersebut terlihat bahwa data cenderung stasioner pada rataan.
+
+### Plot ACF
+
+```{r}
+acf(ar)
+```
+
+Berdasarkan plot ACF tersebut terlihat bahwa plot ACF cenderung *tails off* dan cenderung membentuk pola grafik sinus.
+
+### Plot PACF
+
+```{r}
+pacf(ar)
+```
+
+Berdasarkan plot PACF tersebut, terlihat bahwa plot PACF *cuts off* pada lag kedua, sejalan dengan teori yang ada.
+
+### Plot EACF
+
+```{r}
+TSA::eacf(ar)
+```
+
+Berdasarkan pola segitiga nol pada plot EACF, terlihat bahwa segitiga nol berada pada ordo AR(1) dan ordo MA(1).
+
+### Scatterplot Antar Lag
+
+#### Korelasi antara $Y_t$ dengan $Y_{t-1}$
+
+```{r}
+# Yt
+yt_ar <- ar[-1]
+yt_ar
+```
+
+```{r}
+# Yt-1
+yt_1_ar <- ar[-300]
+yt_1_ar
+```
+
+```{r}
+# Scatterplot Yt vs Yt-1
+plot(yt_ar, yt_1_ar,
+     xlab = expression(Y[t]),
+     ylab = expression(Y[t-1]),
+     main = "Scatterplot: Yt vs Yt-1")
+```
+
+Berdasarkan scatterplot tersebut, terlihat bahwa terdapat hubungan positif antara $Y_t$ dengan $Y_{t−1}$. 
+
+```{r}
+cor(yt_ar,yt_1_ar)
+```
+
+Korelasi antara $Y_t$ dengan $Y_{t-1}$ dari hasil simulasi mendekati perhitungan teoritis, yaitu
+
+$$
+\rho_1=\frac{\phi_1}{1-\phi_2}=\frac{0.5}{1-0.2}=0.625
+$$
+
+#### Korelasi antara $Y_t$ dengan $Y_{t-2}$
+
+```{r}
+# Yt
+yt_ar2 <- ar[-c(1,2)]
+yt_ar2
+```
+
+```{r}
+# Yt-2
+yt_2_ar <- ar[-c(299,300)]
+yt_2_ar
+```
+
+```{r}
+# Scatterplot Yt vs Yt-2
+plot(yt_ar2, yt_2_ar,
+     xlab = expression(Y[t-2]),
+     ylab = expression(Y[t]),
+     main = "Scatterplot: Yt vs Yt-2")
+```
+
+Berdasarkan scatterplot tersebut, terlihat bahwa terdapat hubungan positif antara $Y_t$ dengan $Y_{t−2}$. 
+
+```{r}
+cor(yt_ar2,yt_2_ar)
+```
+
+Korelasi antara $Y_t$ dengan $Y_{t-2}$ dari hasil simulasi mendekati perhitungan teoritis, yaitu
+
+$$
+\rho_2=\frac{\phi_2(1-\phi_2)+\phi_1^2}{1-\phi_2}=\frac{0.2(1-0.2)+(0.5)^2}{1-0.2}=0.5125
+$$
+
+#### Korelasi antara $Y_t$ dengan $Y_{t-3}$
+
+```{r}
+# Yt
+yt_ar3 <- ar[-c(1,2,3)]
+yt_ar3
+```
+
+```{r}
+# Yt-3
+yt_3_ar <- ar[-c(298,299,300)]
+yt_3_ar
+```
+
+```{r}
+# Scatterplot Yt vs Yt-3
+plot(yt_ar3, yt_3_ar,
+     xlab = expression(Y[t]),
+     ylab = expression(Y[t-3]),
+     main = "Scatterplot: Yt vs Yt-3")
+
+```
+
+Berdasarkan scatterplot tersebut, terlihat bahwa terdapat hubungan positif lemah antara $Y_t$ dengan $Y_{t−3}$.
+
+```{r}
+cor(yt_ar3,yt_3_ar)
+```
+
+Korelasi antara $Y_t$ dengan $Y_{t-3}$ dari hasil simulasi mendekati perhitungan teoritis, yaitu
+
+$$
+\rho_3=\phi_1\rho_{k-1}+\phi_2\rho_{k-2}=\phi_1\rho_2+\phi_2\rho_1=(0.5)(0.5125)+(0.2)(0.625)=0.38
+$$
+
+# Proses ARMA
+
+## Pembangkitan Proses ARMA(2,2)
+
+Akan dicoba membangkitkan proses ARMA(2,2) dengan $\theta_1 = 0.4$, $\theta_2 = 0.6$, $\phi_1 = 0.5$ dan $\phi_2 = 0.2$ sebanyak 300 observasi dan $c=0$.
+
+Nilai-nilai selanjutnya dapat dicari melalui *loop*. Bentuk loop dapat dilihat dari rumus AR(2) yang hendak dibangkitkan:
+
+$$ Y_t = 0.5Y_{t-1} + 0.2Y_{t-2} + e_t + 0.4e_{t-1} + 0.6e_{t-2} $$
+
+```{r}
+# Manual
+set.seed(1004)
+
+n <- 300
+wn <- rnorm(n, mean=0, sd=1)  # white noise
+
+arma <- numeric(n)
+
+# nilai awal
+arma[1] <- wn[1]
+arma[2] <- 0.5*arma[1] + wn[2] + 0.4*wn[1]
+
+# loop mulai dari t=3
+for(i in 3:n){
+  arma[i] <- 0.5*arma[i-1] + 0.2*arma[i-2] + wn[i] +
+             0.4*wn[i-1] + 0.6*wn[i-2]
+}
+
+arma
+
+```
+
+```{r}
+# arima.sim
+
+arma2 <- arima.sim(
+  list(order = c(2,0,2), ar = c(0.5, 0.2), ma = c(0.4, 0.6)),
+  n = 300
+)
+arma2
+```
+
+## Karakteristik ARMA(2,2)
+
+### Plot Time Series
+
+```{r}
+par(mfrow = c(1, 2))
+ts.plot(arma)
+ts.plot(arma2)
+par(mfrow = c(1, 1))
+```
+
+Berdasarkan plot time series tersebut, terlihat bahwa model ARMA(2,2) cenderung stasioner dalam rataan
+
+### Plot ACF
+
+```{r}
+par(mfrow = c(1, 2))
+acf(arma)
+acf(arma2)
+par(mfrow = c(1, 1))
+```
+
+Berdasarkan plot ACF tersebut, terlihat bahwa model ARMA(2,2) hasil simulasi memiliki plot ACF yang *tails off*, sesuai dengan teori yang ada.
+
+### Plot EACF
+
+```{r}
+TSA::eacf(arma)
+TSA::eacf(arma2)
+```
+
+Berdasarkan pola segitiga nol pada plot EACF terlihat bahwa segitiga nol berada pada ordo AR(1) dan ordo MA(3).
+
+### Scatterplot Antar Lag
+
+#### Korelasi antara $Y_t$ dengan $Y_{t-1}$
+
+```{r}
+# Yt
+yt_arma <- arma[-1]
+yt_arma
+```
+``` {r}
+#Yt-1
+yt_1_arma <- arma[-300]
+yt_1_arma
+```
+
+```{r}
+# Scatterplot Yt vs Yt-1
+plot(yt_arma, yt_1_arma,
+     xlab = expression(Y[t]),
+     ylab = expression(Y[t-1]),
+     main = "Scatterplot: Yt vs Yt-1")
+```
+
+Berdasarkan scatterplot tersebut, terlihat bahwa terdapat hubungan positif yang kuat antara $Y_t$ dengan $Y_{t−1}$.
+
+```{r}
+cor(yt_arma,yt_1_arma)
+```
+
+Korelasi antara $Y_t$ dengan $Y_{t-1}$ dari hasil simulasi mendekati perhitungan teoritis, yaitu
+
+Langkah 1: Dapatkan akar AR (characteristic polynomial) untuk membentuk bobot deret tak hingga ($\psi_j$)
+$$
+1 - \phi_1 z - \phi_2 z^2 = 0.
+\quad \Rightarrow \quad
+1 - 0.5 z - 0.2 z^2 = 0.
+\\
+r_{1,2}=\dfrac{\phi_1\pm\sqrt{\phi_1^2+4\phi_2}}{2}
+= \dfrac{0.5\pm\sqrt{0.5^2+4\cdot0.2}}{2}
+= \dfrac{0.5\pm\sqrt{1.05}}{2}
+\quad \Rightarrow \quad
+r_1 \approx 0.7623,\qquad r_2 \approx -0.2623.
+$$
+
+Langkah 2: Hitung koefisien awal $\psi_j$
+$$
+\psi_0 = 1, \quad
+\psi_1 = \theta_1 + \phi_1 \psi_0 = 0.4 + 0.5(1) = 0.9,
+\quad
+\psi_2 = \theta_2 + \phi_1 \psi_1 + \phi_2 \psi_0 
+= 0.6 + 0.5(0.9) + 0.2(1) = 1.25.
+$$
+
+Langkah 3: Hitung A dan B
+$$ Misalkan\quad\psi_j=Ar_1^j+Br_2^j\quad dengan\quad
+A + B = \psi_o, \quad A r_1 + B r_2 = \psi_1.
+\\sehingga\quad
+A = \frac{\psi_1 - r_2}{r_1 - r_2} = \frac{0.9 - (-0.2623)}{0.7623 - (-0.2623)} \approx 1.1344, 
+\quad
+B = 1 - A \approx -0.1344.
+$$
+
+Langkah 4: Hitung gamma menggunakan bentuk terutup (closed form)
+$$\gamma_k=\sigma_\varepsilon^2\left(
+\frac{A^2r_1^k}{1-r_1^2}
++\frac{B^2r_2^k}{1-r_2^2}
++\frac{AB(r_1^k+r_2^k)}{1-r_1r_2}
+\right)
+\\
+\gamma_0\approx2.8376\sigma_\varepsilon^2, \quad
+\gamma_1\approx2.2735\sigma_\varepsilon^2, \quad
+\gamma_2\approx1.7043\sigma_\varepsilon^2, \quad
+\gamma_3\approx1.3068\sigma_\varepsilon^2
+$$  
+
+Langkah 5: Standarkan ke autokorelasi
+$$\rho_k=\frac{\gamma_k}{\gamma_0}$$  
+
+Langkah 6: Hitung korelasi $Y_t$ dengan $Y_{t-1}$
+$$\rho_1=\frac{\gamma_1}{\gamma_0}=\frac{2.2735\sigma_\varepsilon^2}{2.8376\sigma_\varepsilon^2}\approx0.8012$$
+
+#### Korelasi antara $Y_t$ dengan $Y_{t-2}$
+
+```{r}
+# Yt
+yt_arma2 <- arma[-c(1,2)]
+yt_arma2
+```
+
+```{r}
+# Yt-2
+yt_2_arma <- arma[-c(299,300)]
+yt_2_arma
+```
+
+```{r}
+# Scatterplot Yt vs Yt-2
+plot(yt_arma2, yt_2_arma,
+     xlab = expression(Y[t]),
+     ylab = expression(Y[t-2]),
+     main = "Scatterplot: Yt vs Yt-2")
+```
+
+Berdasarkan scatterplot tersebut, terlihat bahwa terdapat hubungan positif yang kuat antara $Y_t$ dengan $Y_{t−2}$. Hal ini sesuai dengan teori yang ada
+
+```{r}
+cor(yt_arma2,yt_2_arma)
+```
+
+Korelasi antara $Y_t$ dengan $Y_{t-2}$ dari hasil simulasi mendekati perhitungan teoritis (hasil normalisasi didapatkan dari perhitungan sebelumnya), yaitu
+
+$$\rho_2=\frac{\gamma_2}{\gamma_0}=\frac{1.7043\sigma_\varepsilon^2}{2.8376\sigma_\varepsilon^2}\approx0.6006$$
+
+#### Korelasi antara $Y_t$ dengan $Y_{t-3}$
+
+```{r}
+# Yt
+yt_arma3 <- arma[-c(1,2,3)]
+yt_arma3
+```
+
+```{r}
+# Yt-3
+yt_3_arma <- arma[-c(298,299,300)]
+yt_3_arma
+```
+
+```{r}
+# Scatterplot Yt vs Yt-3
+plot(yt_arma3, yt_3_arma,
+     xlab = expression(Y[t]),
+     ylab = expression(Y[t-3]),
+     main = "Scatterplot: Yt vs Yt-3")
+
+```
+
+Berdasarkan scatterplot tersebut, terlihat bahwa terdapat hubungan positif antara $Y_t$ dengan $Y_{t−3}$. Hal ini sesuai dengan teori yang ada
+
+```{r}
+cor(yt_arma3,yt_3_arma)
+```
+
+
+Korelasi antara $Y_t$ dengan $Y_{t-3}$ dari hasil simulasi mendekati perhitungan teoritis (hasil normalisasi didapatkan dari perhitungan sebelumnya), yaitu
+
+$$\rho_3=\frac{\gamma_3}{\gamma_0}=\frac{1.3068\sigma_\varepsilon^2}{2.8376\sigma_\varepsilon^2}\approx0.4605$$
 
