@@ -1,1 +1,254 @@
+---
+title: "Latihan 5"
+author: "Farah Annisa Mahmud"
+date: "`r Sys.Date()`"
+output: 
+  rmdformats::readthedown
+---
 
+# Library
+
+```{r}
+library(ggplot2)
+library(tsibble)
+library(tseries)
+library(MASS)
+library(dplyr)
+```
+
+# Import Data
+
+```{r}
+data <- read.csv("C:/Users/LENOVO/Downloads/Reversed Bitcoin Historical Price.csv")
+head(data)
+```
+
+```{r}
+dt <- data[, c("Date", "Price")]
+dt <- dt[1:126, ]
+head(dt)
+```
+
+```{r}
+dt$Date <- as.Date(dt$Date, format = "%m/%d/%Y")
+dt$Price <- as.numeric(gsub(",", "", dt$Price))
+```
+
+```{r}
+dt.ts <- ts(dt$Price)
+```
+
+# Plot Time Series
+
+```{r}
+plot_dt <- dt.ts |> as_tsibble() |> 
+  ggplot(aes(x = dt$Date, y = dt$Price)) + geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai")
+plot_dt
+```
+
+Berdasarkan plot time series tersebut, terlihat bahwa data tidak stasioner dalam rataan, ditandai dengan adanya trend pada data dan tidak stasioner dalam ragam, ditandai dengan adanya perbedaan lebar pita pada plot.
+
+# Pembagian Data
+
+```{r}
+# hitung jumlah data
+n <- nrow(dt)
+
+# tentukan batas 6a5% (menyesuaikan karakteristik data)
+n_train <- floor(0.65 * n)
+
+# bagi data
+training <- dt[1:n_train, ]
+testing  <- dt[(n_train+1):n, ]
+
+# ubah ke time series
+train.ts <- ts(training$Price)
+test.ts  <- ts(testing$Price)
+```
+
+# Plot Time Series
+
+## Data Train
+
+```{r}
+plot_dt1 <- train.ts |> as_tsibble() |> 
+  ggplot(aes(x = training$Date, y = training$Price)) + geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai")
+plot_dt1
+```
+
+Berdasarkan plot time series tersebut, terlihat bahwa data train tidak stasioner dalam rataan, ditandai dengan adanya trend pada data dan tidak stasioner dalam ragam, ditandai dengan adanya perbedaan lebar pita pada plot.
+
+## Data Test
+
+```{r}
+plot_dt2 <- test.ts |> as_tsibble() |> 
+  ggplot(aes(x = testing$Date, y = testing$Price)) + geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai")
+plot_dt2
+```
+
+Berdasarkan plot time series tersebut, terlihat bahwa data test tidak stasioner dalam rataan, ditandai dengan adanya trend pada data dan tidak stasioner dalam ragam, ditandai dengan adanya perbedaan lebar pita pada plot.
+
+# Plot ACF
+
+## Data Train
+```{r}
+acf(training$Price)
+```
+
+Berdasarkan plot ACF, terlihat bahwa plot ACF pada data train menurun secara perlahan (*tails off slowly*) yang menandakan data tidak stasioner dalam rataan.
+
+## Data Test
+
+```{r}
+acf(testing$Price)
+```
+
+Berdasarkan plot ACF, terlihat bahwa plot ACF pada data test menurun secara perlahan (*tails off slowly*) yang menandakan data tidak stasioner dalam rataan.
+
+# Uji ADF
+
+Hipotesis:
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+## Data Train
+
+```{r}
+adf.test(training$Price)
+```
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.7686 yang lebih besar dari taraf nyata 5% dan menandakan bahwa data train tidak stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series dan plot ACF.
+
+## Data Test
+
+```{r}
+adf.test(testing$Price)
+```
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.7387 yang lebih besar dari taraf nyata 5% dan menandakan bahwa data test tidak stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series dan plot ACF.
+
+# Plot Box-Cox
+
+## Data Train
+
+```{r}
+training$Date <- seq(1:length(train.ts))
+
+# Uji Box-Cox
+bc1 <- boxcox(
+  training$Price ~ training$Date,
+  lambda = seq(-1.5, 1, by = 0.001)
+)
+```
+
+```{r}
+# Nilai lambda optimum (dibulatkan)
+lambda1 <- bc1$x[which.max(bc1$y)]
+lambda1
+```
+
+```{r}
+# Selang kepercayaan 95% untuk lambda
+ci_lambda1 <- bc1$x[bc1$y > max(bc1$y) - 0.5 * qchisq(0.95, 1)]
+
+# Batas bawah dan batas atas
+ci_lower1 <- min(ci_lambda1)
+ci_upper1 <- max(ci_lambda1)
+
+c(Batas_Bawah = ci_lower1, Batas_Atas = ci_upper1)
+```
+
+Hasil uji Box–Cox menunjukkan bahwa nilai λ optimum adalah -0.83 dengan interval kepercayaan 95% sebesar (-1.004 hingga -0.661). Karena selang tersebut tidak memuat nilai λ = 1, maka dapat disimpulkan bahwa data tidak stasioner dalam ragam sehingga diperlukan transformasi.
+
+## Data Test
+
+```{r}
+testing$Date <- seq(from = length(train.ts) + 1,
+                    by = 1,
+                    length.out = nrow(testing))
+
+# Uji Box-Cox
+bc2 <- boxcox(
+  testing$Price ~ testing$Date,
+  lambda = seq(-1.5, 1, by = 0.001)
+)
+```
+
+```{r}
+# Nilai lambda optimum (dibulatkan)
+lambda2 <- bc2$x[which.max(bc2$y)]
+lambda2
+```
+
+```{r}
+# Selang kepercayaan 95% untuk lambda
+ci_lambda2 <- bc2$x[bc2$y > max(bc2$y) - 0.5 * qchisq(0.95, 1)]
+
+# Batas bawah dan batas atas
+ci_lower2 <- min(ci_lambda2)
+ci_upper2 <- max(ci_lambda2)
+
+c(Batas_Bawah = ci_lower2, Batas_Atas = ci_upper2)
+```
+
+Hasil uji Box–Cox menunjukkan bahwa nilai λ optimum adalah -0.307 dengan interval kepercayaan 95% sebesar (-0.859 hingga 0.272). Karena selang tersebut memuat nilai λ = 1, maka dapat disimpulkan bahwa data stasioner dalam ragam.
+
+# Penanganan Stasioneritas pada Data Train
+
+## Differencing
+
+```{r}
+# Differencing pertama pada postrend
+dt_diff1 <- diff(train.ts, differences = 1)
+
+# Plot hasil differencing
+ts.plot(dt_diff1,
+        main = "First-order Differencing dari postrend",
+        col = "blue", lwd = 2)
+
+# Plot ACF
+acf(dt_diff1)
+
+# Uji ADF
+adf.test(dt_diff1)
+```
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.01 yang lebih kecil dari taraf nyata 5% dan menandakan bahwa data train sudah stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series dan plot ACF.
+
+## Plot Box-Cox
+
+```{r}
+training <- training[-1, ]   # buang baris pertama
+training$Price <- dt_diff1 - min(dt_diff1) + 1
+training$Date <- seq_along(dt_diff1)
+
+bc3 <- boxcox(
+  lm(Price ~ Date, data = training),
+  lambda = seq(-1, 1, by = 0.01)
+)
+
+```
+
+```{r}
+# Nilai lambda optimum (dibulatkan)
+lambda3 <- bc3$x[which.max(bc3$y)]
+lambda3
+```
+
+```{r}
+# Selang kepercayaan 95% untuk lambda
+ci_lambda3 <- bc3$x[bc3$y > max(bc3$y) - 0.5 * qchisq(0.95, 1)]
+
+# Batas bawah dan batas atas
+ci_lower3 <- min(ci_lambda3)
+ci_upper3 <- max(ci_lambda3)
+
+c(Batas_Bawah = ci_lower3, Batas_Atas = ci_upper3)
+```
+
+Hasil uji Box–Cox menunjukkan bahwa nilai λ optimum adalah 0.93 dengan interval kepercayaan 95% sebesar (0.74 hingga 1.00). Karena selang tersebut memuat nilai λ = 1 dan nilai λ optimum mendekati 1, maka dapat disimpulkan bahwa data train sudah stasioner dalam ragam.
